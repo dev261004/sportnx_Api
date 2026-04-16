@@ -14,7 +14,7 @@ const login: RequestSchema = {
     latitude: joi.number().optional().min(-90).max(90),
     location: joi.string().optional(),
     sport: joi.string().uuid().optional(),
-    fcmToken: joi.string().required(),
+    fcmToken: joi.string().optional(),
   }),
 };
 

@@ -78,7 +78,7 @@ const login = async (body: LoginBodyUser, req: Request) => {
         location,
         sportId: sportId,
         countryCode: "+91",
-        fcmToken: [fcmToken],
+      fcmToken: fcmToken ? [fcmToken] : [],
       });
 
 
@@ -116,7 +116,7 @@ const login = async (body: LoginBodyUser, req: Request) => {
       });
     } else {
       const userFcmTokens = user.fcmToken || [];
-      // if (fcmToken && !userFcmTokens.includes(fcmToken)) {
+      if (fcmToken && !userFcmTokens.includes(fcmToken)) {
         logger.info("customerId updating...");
         userFcmTokens.push(fcmToken);
         await Customer.update(
@@ -151,7 +151,7 @@ const login = async (body: LoginBodyUser, req: Request) => {
       },
     }
       );
-      // }
+       }
     }
 
 

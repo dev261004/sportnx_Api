@@ -293,7 +293,7 @@ export interface LoginBodyUser {
   longitude?: number;
   location?: string;
   sport?: string;
-  fcmToken: string;
+  fcmToken?: string;
 }
 export interface VerifyOTPBodyUser {
   phone: string;
