@@ -12,6 +12,7 @@
     "resendOTPPhone": "New Verification code has been sent to your phone number.",
     "resendOTPEmail": "OTP has been resent successfully.",
     "resetPassword": "Password has been reset successfully.",
+    "profileUpdated": "Profile updated successfully.",
     "refreshToken": "Access token refreshed successfully.",
     "setSports": "Details saved successfully.",
     "sports_fetched": "Sports fetched successfully.",
