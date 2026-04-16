@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Sequelize, Op, Includeable, WhereOptions, Order, col, fn, literal } from "sequelize";
 import { Request } from "express";
 import CustomAppError, { handleError } from "../../common/utils/appError";
@@ -78,6 +79,39 @@ const ensureVenueImageCache = async (
   }
 
   return mergedImages;
+};
+const extractValidImages = (images: any): string[] => {
+  if (!images) return [];
+
+  // convert "{a,b,c}" → ["a","b","c"]
+  if (typeof images === "string") {
+    images = images.replace(/[{}]/g, "").split(",");
+  }
+
+  if (!Array.isArray(images)) return [];
+
+  return images.map((img) => img.trim());
+};
+
+const getPreferredImage = (images: any): string | null => {
+  const cleaned = extractValidImages(images);
+
+  if (cleaned.length === 0) return null;
+
+  // 🥇 Priority 1: Cloudinary
+  const cloudinary = cleaned.find((img) =>
+    img.includes("res.cloudinary.com")
+  );
+  if (cloudinary) return cloudinary;
+
+  // 🥈 Priority 2: Unsplash
+  const unsplash = cleaned.find((img) =>
+    img.includes("images.unsplash.com")
+  );
+  if (unsplash) return unsplash;
+
+  // 🥉 fallback: first valid
+  return cleaned[0] || null;
 };
 
 const getCityList = async (req: Request) => {
@@ -335,8 +369,7 @@ const venuesList = async (query: VenuesListQuery, req: Request) => {
           ).toString() + " km";
       }
 
-      const image =
-        Array.isArray(v.images) && v.images.length > 0 ? v.images[0] : null;
+     const image = getPreferredImage(v.images);
 
       const boxes = v.boxes.map((box) => ({
         box_id: box.id,
@@ -500,8 +533,7 @@ console.log(
           allSportMappings.find((m) => String(m.sportId) === sportId)
             ?.defaultPrice ?? null;
 
-        const image =
-          Array.isArray(v.images) && v.images.length > 0 ? v.images[0] : null;
+        const image = getPreferredImage(v.images);
 
         const boxes = availableBoxes.map((box) => ({
           box_id: String(box.id),
@@ -1128,7 +1160,7 @@ const venueDetail = async (query: venueDetailQuery, req: Request) => {
       venueId: venue.id,
       venueName: venue.venueName,
       location: venue.location,
-      images: venue.images,
+     images: extractValidImages(venue.images),
       venueTiming: venueTimingArr,
       sportList,
       distance_km,
@@ -1534,6 +1566,8 @@ const getOwnerVenueList = async(req: Request)=>{
 export default {
   getCityList,
   venuesList,
+  getPreferredImage,
+  extractValidImages,
   venuesHomepageList,
   fixedPrice,
   addVenueTiming,
