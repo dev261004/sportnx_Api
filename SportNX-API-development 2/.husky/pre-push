@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec ./scripts/run-with-nvm.sh npm run check:deps

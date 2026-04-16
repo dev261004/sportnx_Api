@@ -1,0 +1,10 @@
+{
+  "auth": {
+    "common": "2.0.0",
+    "customer": "2.0.0",
+    "manager": "2.1.0"
+  },
+  "sports": "1.0.0",
+  "venues": "7.1.0",
+  "booking": "14.1.0"
+}

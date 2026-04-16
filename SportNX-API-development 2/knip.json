@@ -1,0 +1,5 @@
+{
+  "project": ["source/**"],
+  "ignore": ["source/common/utils/bumpVersion.ts"],
+  "ignoreDependencies": ["pg", "crypto"]
+}

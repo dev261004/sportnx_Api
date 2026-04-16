@@ -1,0 +1,4 @@
+#!/bin/sh
+
+exec ./scripts/run-with-nvm.sh npm run lint
+exec ./scripts/scripts/prevent-overfetch.sh

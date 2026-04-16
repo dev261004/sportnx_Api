@@ -1,0 +1,8 @@
+node_modules/
+.env
+package-lock.json
+.DS_Store
+.platform/.DS_Store
+.platform/nginx/conf.d/.DS_Store
+build
+.vscode/
