@@ -1,6 +1,7 @@
 import Razorpay from "razorpay";
 import config from "../../common/config/config";
 import Bookings from "../../database/models/bookings";
+import Venues from "../../database/models/venues";
 import logger from "../../common/config/logger";
 import constant from "../../common/config/constant";
 import CustomAppError from "../../common/utils/appError";
@@ -8,6 +9,7 @@ import { StatusCodes } from "http-status-codes";
 import crypto from "crypto";
 import { sequelize } from "../../database/sequelize";
 import { Transaction } from "sequelize";
+import { BookingAttributes } from "../../common/utils/types";
 
 
 const razorpay = new Razorpay({
@@ -45,6 +47,92 @@ export const createOrder = async (
     return order;
   } catch (error) {
     logger.info("error:===>", error);
+  }
+};
+
+interface DevBypassBookingData {
+  venueId: string;
+  customerId?: BookingAttributes["customerId"];
+  bookingDate: string;
+  boxId: string;
+  sportId: string;
+  bookingAmount: NonNullable<BookingAttributes["bookingAmount"]>;
+  bookingId?: string;
+  convenienceFees: NonNullable<BookingAttributes["convenienceFees"]>;
+  totalAmount: number;
+  paidAmount: number;
+  dueAmount: number;
+  paymentStatus?: BookingAttributes["paymentStatus"];
+  customerDetails?: NonNullable<BookingAttributes["customerDetails"]>;
+}
+
+export const completeBypassBooking = async (
+  bookingData: DevBypassBookingData
+) => {
+  const transaction = await sequelize.transaction({
+    isolationLevel: Transaction.ISOLATION_LEVELS.REPEATABLE_READ,
+  });
+
+  try {
+    if (!bookingData.bookingId) {
+      throw new CustomAppError(
+        StatusCodes.BAD_REQUEST,
+        "Missing bookingId for bypass booking"
+      );
+    }
+
+    const booking = await Bookings.findOne({
+      where: { id: bookingData.bookingId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!booking) {
+      throw new CustomAppError(
+        StatusCodes.NOT_FOUND,
+        `No booking found for id ${bookingData.bookingId}`
+      );
+    }
+
+    const venue = await Venues.findByPk(bookingData.venueId, {
+      attributes: ["id", "boxOwnerId"],
+      transaction,
+    });
+
+    const ownerId = (Array.isArray(venue?.boxOwnerId)
+      ? venue?.boxOwnerId[0] || null
+      : venue?.boxOwnerId || null) as BookingAttributes["ownerId"];
+
+    booking.customerId = bookingData.customerId || null;
+    booking.ownerId = ownerId;
+    booking.bookingAmount = bookingData.bookingAmount;
+    booking.convenienceFees = bookingData.convenienceFees;
+    booking.totalAmount = bookingData.totalAmount;
+    booking.paidAmount = bookingData.paidAmount;
+    booking.dueAmount = bookingData.dueAmount;
+    booking.paymentStatus =
+      bookingData.paymentStatus === constant.PAYMENT_STATUS.PARTIAL
+        ? constant.PAYMENT_STATUS.PARTIAL
+        : constant.PAYMENT_STATUS.FULL_PAID;
+    booking.bookingStatus = constant.BOOKING_STATUS.CONFIRMED;
+    if (bookingData.customerDetails) {
+      booking.customerDetails = bookingData.customerDetails;
+    }
+    booking.razorpayPaymentId = `dev-bypass-${Date.now()}`;
+    booking.razorpayPaymentMethod = "dev_bypass";
+    booking.expiresAt = undefined;
+
+    await booking.save({ transaction });
+    await transaction.commit();
+
+    return {
+      bypassed: true,
+      bookingId: booking.id,
+    };
+  } catch (error) {
+    await transaction.rollback();
+    logger.error("❌ Error finalizing bypass booking", error);
+    throw error;
   }
 };
 
@@ -292,24 +380,50 @@ export const initiateRefund = async ({
    let refund;
 
    const booking = await Bookings.findByPk(bookingId, {
-           attributes: ["id"],
+           attributes: [
+             "id",
+             "refundAmount",
+             "razorpayPaymentId",
+             "razorpayPaymentMethod",
+           ],
    });
  
      if (!booking) {
        logger.error(`Booking not found for payment: ${razorpayPaymentId}`);
        return;
      }
+
+   const cancellationDetails = {
+     cancellationTimeStamp: new Date(),
+   };
+   const isDevBypassPayment =
+     booking.razorpayPaymentMethod === "dev_bypass" ||
+     booking.razorpayPaymentId?.startsWith("dev-bypass-") ||
+     razorpayPaymentId?.startsWith("dev-bypass-");
  
    if (typeof refundAmount === "number" && refundAmount > 0) {
+    if (isDevBypassPayment) {
+      await booking.update({
+        bookingStatus: constant.BOOKING_STATUS.CANCELLED,
+        refundAmount,
+        cancellationDetails,
+        paymentStatus: constant.PAYMENT_STATUS.REFUNDED,
+      });
+
+      return {
+        status: "SUCCESS",
+        refundProcessed: true,
+        refundAmount,
+        message: "Booking cancelled and refund recorded successfully.",
+      };
+    }
+
     logger.info("Initiating refund of amount:", Math.round(refundAmount * 100));
      refund = await razorpay.payments.refund(razorpayPaymentId, {
        amount: Math.round(refundAmount * 100),
      });
 
    } else {
-        const cancellationDetails = {
-      cancellationTimeStamp: new Date(),
-    };
      await booking.update(
       {
         bookingStatus: constant.BOOKING_STATUS.CANCELLED,
@@ -376,4 +490,3 @@ const handlePaymentRefunded = async (refund: any) => {
     throw error;
   }
 };
-

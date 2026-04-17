@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
-import { createOrder, handleWebhook, initiateRefund, verifyPayment } from "./paymentService";
+import {
+  completeBypassBooking,
+  createOrder,
+  handleWebhook,
+  initiateRefund,
+  verifyPayment,
+} from "./paymentService";
 import createResponse from "../../common/utils/response";
 import { StatusCodes } from "http-status-codes";
 import { handleError } from "../../common/utils/appError";
@@ -9,6 +15,19 @@ import logger from "../../common/config/logger";
 export const createOrderController = async (req: Request, res: Response) => {
   try {
     const { amount, currency, bookingData } = req.body;
+
+    if (bookingData?.skipPaymentGateway) {
+      const booking = await completeBypassBooking(bookingData);
+
+      createResponse(
+        res,
+        StatusCodes.OK,
+        req.t("successMessages.orderCreated"),
+        booking
+      );
+      return;
+    }
+
     const notes = {
       venueId: bookingData.venueId,
       boxId: bookingData.boxId,

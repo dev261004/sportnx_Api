@@ -29,6 +29,13 @@ import logger from "../../common/config/logger";
 import { sequelize } from "../../database/sequelize"; 
 const version = getModuleVersion("booking");
 
+const getBookingDateKey = (bookingDate: unknown): string => {
+  if (typeof bookingDate === "string") {
+    return bookingDate.split("T")[0];
+  }
+  return moment(bookingDate as string | Date).format("YYYY-MM-DD");
+};
+
 const listAvailableSlots = async (query: ListSlotsQuery, req: Request) => {
   try {
     const { venueId, boxId } = query;
@@ -82,6 +89,12 @@ const listAvailableSlots = async (query: ListSlotsQuery, req: Request) => {
         bookingDate: {
           [Op.between]: [startDate.toDate(), endDate.toDate()],
         },
+        bookingStatus: {
+          [Op.notIn]: [
+            constant.BOOKING_STATUS.CANCELLED,
+            constant.BOOKING_STATUS.EXPIRED,
+          ],
+        },
       },
       attributes: [
         "id",
@@ -94,7 +107,7 @@ const listAvailableSlots = async (query: ListSlotsQuery, req: Request) => {
 
     const bookingsByDate = new Map<string, typeof bookingsInRange>();
     for (const booking of bookingsInRange) {
-      const key = moment(booking.bookingDate).format("YYYY-MM-DD");
+      const key = getBookingDateKey(booking.bookingDate);
       if (!bookingsByDate.has(key)) bookingsByDate.set(key, []);
       bookingsByDate.get(key)!.push(booking);
     }
@@ -920,6 +933,12 @@ const listAvailableSlotsUser = async (
         boxId: { [Op.in]: boxIds },
         venueId: venue.id,
         bookingDate: { [Op.between]: [startDate.toDate(), endDate.toDate()] },
+        bookingStatus: {
+          [Op.notIn]: [
+            constant.BOOKING_STATUS.CANCELLED,
+            constant.BOOKING_STATUS.EXPIRED,
+          ],
+        },
       },
       attributes: ["id", "boxId", "startTime", "endTime", "bookingDate","bookingStatus"],
     });
@@ -927,7 +946,7 @@ const listAvailableSlotsUser = async (
     // ✅ Pre-group bookings by (boxId + date)
     const bookingsByBoxAndDate = new Map<string, typeof bookings>();
     for (const b of bookings) {
-      const key = `${b.boxId}-${moment(b.bookingDate).format("YYYY-MM-DD")}`;
+      const key = `${b.boxId}-${getBookingDateKey(b.bookingDate)}`;
       if (!bookingsByBoxAndDate.has(key)) bookingsByBoxAndDate.set(key, []);
       bookingsByBoxAndDate.get(key)!.push(b);
     }
